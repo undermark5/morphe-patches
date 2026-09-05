@@ -389,6 +389,58 @@
       "options": []
     },
     {
+      "name": "Bluetooth LE Audio microphone",
+      "description": "Records from a Bluetooth LE Audio device's microphone instead of the phone's built-in mic. Requires the Bluetooth LE Audio output patch to be useful.",
+      "default": true,
+      "dependencies": [],
+      "compatiblePackages": [
+        {
+          "packageName": "co.happybits.marcopolo",
+          "name": "Marco Polo",
+          "description": null,
+          "apkFileType": null,
+          "appIconColor": null,
+          "signatures": null,
+          "targets": [
+            {
+              "version": "0.590.0",
+              "versionCodes": null,
+              "isExperimental": false,
+              "minSdk": 32,
+              "description": null
+            }
+          ]
+        }
+      ],
+      "options": []
+    },
+    {
+      "name": "Bluetooth LE Audio output",
+      "description": "Lets Marco Polo route playback to Bluetooth LE Audio devices (hearing aids, LE Audio earbuds) instead of falling back to the phone speaker.",
+      "default": true,
+      "dependencies": [],
+      "compatiblePackages": [
+        {
+          "packageName": "co.happybits.marcopolo",
+          "name": "Marco Polo",
+          "description": null,
+          "apkFileType": null,
+          "appIconColor": null,
+          "signatures": null,
+          "targets": [
+            {
+              "version": "0.590.0",
+              "versionCodes": null,
+              "isExperimental": false,
+              "minSdk": 32,
+              "description": null
+            }
+          ]
+        }
+      ],
+      "options": []
+    },
+    {
       "name": "Bypass certificate checks",
       "description": "Bypasses certificate checks which prevent YouTube Music from working on Android Auto.",
       "default": true,
