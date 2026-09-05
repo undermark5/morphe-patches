@@ -3,6 +3,7 @@ package app.morphe.patches.marcopolo.audio
 import app.morphe.patcher.Fingerprint
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
 import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
+import app.morphe.patcher.patch.booleanOption
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod.Companion.toMutable
 import app.morphe.patches.marcopolo.shared.Constants.COMPATIBILITY_MARCO_POLO
@@ -14,6 +15,11 @@ import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 private const val PLATFORM_AUDIO_OUTPUT_CLASS = "Lco/happybits/hbmx/PlatformAudioOutput;"
 private const val HAS_BLE_DEVICE_HELPER_NAME = "patch_hasBleAudioDevice"
 
+/** AudioDeviceInfo.TYPE_WIRED_HEADSET */
+private const val REMAP_TARGET_WIRED_HEADSET = 0x3
+/** AudioDeviceInfo.TYPE_BLUETOOTH_A2DP */
+private const val REMAP_TARGET_BLUETOOTH_A2DP = 0x8
+
 @Suppress("unused")
 val bleAudioOutputPatch = bytecodePatch(
     name = "Bluetooth LE Audio output",
@@ -23,28 +29,45 @@ val bleAudioOutputPatch = bytecodePatch(
 ) {
     compatibleWith(COMPATIBILITY_MARCO_POLO)
 
+    val labelAsBluetooth = booleanOption(
+        key = "labelAsBluetooth",
+        default = false,
+        title = "Show as Bluetooth instead of wired headphones",
+        description = "By default the LE Audio device is disguised as a wired headset " +
+            "(TYPE_WIRED_HEADSET), which is always safe: it is unconditionally added to " +
+            "the route list and never depends on any server-side flag. Enabling this " +
+            "instead disguises it as TYPE_BLUETOOTH_A2DP, so it shows up correctly " +
+            "labeled as \"Bluetooth\" and gets the Bluetooth-highlighted route button " +
+            "state. Only enable this if Marco Polo's server-side \"bluetoothHfpAndroid\" " +
+            "feature flag is off for your account — that flag is controlled remotely by " +
+            "Marco Polo, not by you, and if it is (or becomes) enabled, devices disguised " +
+            "as Bluetooth are silently dropped from the route list entirely rather than " +
+            "merely mislabeled."
+    )
+
     execute {
         /**
          * Rewrites the AudioDeviceInfo type in-place, immediately after the app reads it.
          *
-         * TYPE_BLE_HEADSET (26), TYPE_BLE_SPEAKER (27) and TYPE_BLE_BROADCAST (30)
-         * become TYPE_WIRED_HEADSET (3). Every other type is left untouched.
+         * TYPE_BLE_HEADSET (26), TYPE_BLE_SPEAKER (27) and TYPE_BLE_BROADCAST (30) become
+         * [targetType]. Every other type is left untouched.
          *
-         * Type 3 is deliberate: it is added to the route list unconditionally, it maps
-         * to RouteType.HEADPHONES which outranks earpiece and speaker in the selection
-         * chain, and it takes the non-HFP branch in applyOutputRoute — so the app calls
-         * AudioTrack.setPreferredDevice(bleDevice) instead of startBluetoothSco(),
-         * which is what LE Audio actually needs.
+         * The default target, TYPE_WIRED_HEADSET (3), is deliberate: it is added to the
+         * route list unconditionally, it maps to RouteType.HEADPHONES which outranks
+         * earpiece and speaker in the selection chain, and it takes the non-HFP branch in
+         * applyOutputRoute — so the app calls AudioTrack.setPreferredDevice(bleDevice)
+         * instead of startBluetoothSco(), which is what LE Audio actually needs.
          *
-         * Mapping to TYPE_BLUETOOTH_A2DP (8) would look more natural but is gated on
-         * `_enableBluetooth && !_enableBluetoothHfp`, and _enableBluetoothHfp is driven
-         * by the server-side `bluetoothHfpAndroid` feature flag. If that flag flipped on
-         * for your account, BLE devices would silently vanish from the list again.
+         * TYPE_BLUETOOTH_A2DP (8) looks more natural (and is what the [labelAsBluetooth]
+         * option selects) but is gated on `_enableBluetooth && !_enableBluetoothHfp`, and
+         * _enableBluetoothHfp is driven by the server-side `bluetoothHfpAndroid` feature
+         * flag. If that flag is or becomes enabled, BLE devices silently vanish from the
+         * list entirely under this target, instead of merely being mislabeled.
          *
          * The sequence only ever touches the destination register of the move-result,
          * so it needs no scratch register and cannot clobber live values.
          */
-        fun Fingerprint.normalizeBleDeviceType() {
+        fun Fingerprint.normalizeBleDeviceType(targetType: Int) {
             val moveResultIndex = instructionMatches.last().index
 
             method.apply {
@@ -62,7 +85,7 @@ val bleAudioOutputPatch = bytecodePatch(
                         add-int/lit8 v$register, v$register, 0x1e
                         goto :morphe_done
                         :morphe_is_ble
-                        const/16 v$register, 0x3
+                        const/16 v$register, $targetType
                         :morphe_done
                         nop
                     """
@@ -70,11 +93,17 @@ val bleAudioOutputPatch = bytecodePatch(
             }
         }
 
+        val targetType = if (labelAsBluetooth.value == true) {
+            REMAP_TARGET_BLUETOOTH_A2DP
+        } else {
+            REMAP_TARGET_WIRED_HEADSET
+        }
+
         // Makes the device selectable and gives it a usable RouteType.
-        GetAvailableRoutesFingerprint.normalizeBleDeviceType()
+        GetAvailableRoutesFingerprint.normalizeBleDeviceType(targetType)
 
         // Makes Route report the right type once it has been selected.
-        RouteConstructorFingerprint.normalizeBleDeviceType()
+        RouteConstructorFingerprint.normalizeBleDeviceType(targetType)
 
         /**
          * Makes the audio-route button (and its picker menu) actually appear for an LE
