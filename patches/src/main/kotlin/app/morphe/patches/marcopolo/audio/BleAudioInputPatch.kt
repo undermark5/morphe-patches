@@ -63,9 +63,9 @@ val bleAudioInputPatch = bytecodePatch(
                     addInstructionsWithLabels(
                         0,
                         """
-                            iget-object v0, p0, $AUDIO_RECORDER_CLASS->_record Landroid/media/AudioRecord;
+                            iget-object v0, p0, $AUDIO_RECORDER_CLASS->_record:Landroid/media/AudioRecord;
                             if-eqz v0, :patch_done
-                            iget-object v1, p0, $AUDIO_RECORDER_CLASS->_audioManager Landroid/media/AudioManager;
+                            iget-object v1, p0, $AUDIO_RECORDER_CLASS->_audioManager:Landroid/media/AudioManager;
                             if-eqz v1, :patch_done
 
                             # GET_DEVICES_INPUTS
