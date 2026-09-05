@@ -46,6 +46,37 @@ internal object GetAvailableRoutesFingerprint : Fingerprint(
 )
 
 /**
+ * PrivacyModeAudioRouter.updateForCurrentAudioRoutes(Route, RouteChangeReason)
+ *
+ * Matches the call to PlatformAudioOutput.hasBluetooth() at the top of this method.
+ * hasBluetooth() just returns the private _hasBluetooth field, which has no setter
+ * anywhere in the app's own Kotlin/Java code — it's written exclusively by the
+ * native hbmx core, almost certainly from classic Bluetooth A2DP/HFP profile
+ * connection callbacks. LE Audio devices never establish an A2DP or HFP profile
+ * connection, so this stays false for an LE Audio-only pairing even while such a
+ * device is present and selected as the active route.
+ *
+ * When hasBluetooth() is false, this method early-returns, forcing its
+ * audioRouteConfiguration Property to NONE; ConversationHeaderController hides the
+ * entire audio-route button whenever that configuration is NONE. So without
+ * patching this call site too, the output/route-picker button never appears for an
+ * LE Audio connection, regardless of the RouteType remap above.
+ *
+ * Not filtering by accessFlags/parameters/returnType: jadx reports this method's
+ * declared access as changed from private (it's invoked from an anonymous
+ * EventBus listener), so the real compiled access flags are uncertain. The method
+ * name alone is unique enough in this class.
+ */
+internal object UpdateForCurrentAudioRoutesFingerprint : Fingerprint(
+    definingClass = "Lco/happybits/marcopolo/ui/screens/conversation/PrivacyModeAudioRouter;",
+    name = "updateForCurrentAudioRoutes",
+    filters = listOf(
+        methodCall(smali = "Lco/happybits/hbmx/PlatformAudioOutput;->hasBluetooth()Z"),
+        opcode(Opcode.MOVE_RESULT, location = MatchAfterImmediately())
+    )
+)
+
+/**
  * AudioRecorder.initialize(int, int, int)
  *
  * Brute-forces sample rate / channel / audio source combinations until an
